@@ -19,6 +19,11 @@ namespace DependencyInjectionEngine
             registredList[typeof(From)] = new RegisteredTypeInfo(typeof(To), singleton);
         }
 
+        public void RegisterInstance<T>(T instance)
+        {
+            registredList[typeof(T)] = new RegisteredTypeInfo(instance.GetType(), true, instance);
+        }
+
         public T Resolve<T>()
         {
             RegisteredTypeInfo typeInfo;
@@ -44,22 +49,20 @@ namespace DependencyInjectionEngine
 
     class RegisteredTypeInfo
     {
+
+        Type ResolveType { get; set; }
+        bool Singleton { get; set; }
+        object _instance;
+
         public RegisteredTypeInfo(Type resolveType, bool singleton)
         {
             this.ResolveType = resolveType;
             this.Singleton = singleton;
         }
 
-        Type ResolveType { get; set; }
-        bool Singleton { get; set; }
-        object _instance;
-
-        public void SetInstance(object instance)
+        public RegisteredTypeInfo(Type resolveType, bool singleton, object instance) : this(resolveType, singleton)
         {
-            if (_instance == null && Singleton)
-            {
-                _instance = instance;
-            }
+            _instance = instance;
         }
 
         public object GetInstance()
