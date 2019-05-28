@@ -1,32 +1,37 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Linq;
 
 namespace DependencyInjectionEngine
 {
     public class SimpleContainer
     {
 
-        Dictionary<Type, RegisteredTypeInfo> registredList = new Dictionary<Type, RegisteredTypeInfo>();
+        Dictionary<Type, TypeInfo> registredList = 
+            new Dictionary<Type, TypeInfo>();
 
         public void RegisterType<T>(bool singleton) where T : class
         {
-            registredList[typeof(T)] = new RegisteredTypeInfo(typeof(T), singleton);
+            registredList[typeof(T)] = new TypeInfo(typeof(T), singleton);
         }
 
         public void RegisterType<From, To>(bool singleton) where To : From
         {
-            registredList[typeof(From)] = new RegisteredTypeInfo(typeof(To), singleton);
+            registredList[typeof(From)] = 
+                new TypeInfo(typeof(To), singleton);
         }
 
         public void RegisterInstance<T>(T instance)
         {
-            registredList[typeof(T)] = new RegisteredTypeInfo(instance.GetType(), true, instance);
-        }
+            registredList[typeof(T)] = 
+                new TypeInfo(instance.GetType(), true, instance);
+        }
+
 
         public T Resolve<T>()
         {
-            RegisteredTypeInfo typeInfo;
+            TypeInfo typeInfo;
             try
             {
                 typeInfo = registredList[typeof(T)];
@@ -35,45 +40,64 @@ namespace DependencyInjectionEngine
             {
                 if (!typeof(T).IsClass)
                 {
-                    throw new KeyNotFoundException(String.Format("Cannot find type {0} in container registered types.", typeof(T)), e);
+                    throw
+                        new KeyNotFoundException(String.Format(
+                            "Cannot find type {0} in container registered types.",
+                            typeof(T)), e);
                 }
                 else
                 {
-                    return (T)typeof(T).GetConstructor(new Type[0]).Invoke(new object[0]);
+                    return (T)GetInstance(new TypeInfo(typeof(T), false));
                 }
             }
+            return (T)GetInstance(typeInfo);
+        }
 
-            return (T)typeInfo.GetInstance();
+        private object GetInstance(TypeInfo typeInfo)
+        {
+            ConstructorInfo constructor;
+
+
+            if (typeInfo.Instance != null && typeInfo.Singleton)
+            {
+                return typeInfo.Instance;
+            }
+
+
+            constructor = typeInfo.ResolveType.GetConstructors()
+                .OrderByDescending(x => x.GetParameters().GetLength(0))
+                .First();
+
+            foreach (var (item, index) in constructor.GetParameters().WithIndex())
+            {
+                Type type = item.ParameterType;
+                MethodInfo method = typeof(SimpleContainer).GetMethod("GenericMethod");
+                MethodInfo generic = method.MakeGenericMethod(type);
+                var result = generic.Invoke(this, null);
+            }
+
+            typeInfo.Instance = typeInfo.ResolveType.GetConstructor(new Type[0]).Invoke(new object[0]);
+            return typeInfo.Instance;
         }
     }
 
-    class RegisteredTypeInfo
+    class TypeInfo
     {
 
-        Type ResolveType { get; set; }
-        bool Singleton { get; set; }
-        object _instance;
+        public Type ResolveType { get; set; }
+        public bool Singleton { get; set; }
+        public object Instance { get; set; }
 
-        public RegisteredTypeInfo(Type resolveType, bool singleton)
+        public TypeInfo(Type resolveType, bool singleton)
         {
             this.ResolveType = resolveType;
             this.Singleton = singleton;
         }
 
-        public RegisteredTypeInfo(Type resolveType, bool singleton, object instance) : this(resolveType, singleton)
+        public TypeInfo(Type resolveType, bool singleton, object instance) 
+            : this(resolveType, singleton)
         {
-            _instance = instance;
-        }
-
-        public object GetInstance()
-        {
-            if (_instance != null && Singleton)
-            {
-                return _instance;
-            }
-
-            _instance = ResolveType.GetConstructor(new Type[0]).Invoke(new object[0]);
-            return _instance;
+            Instance = instance;
         }
     }
 }
