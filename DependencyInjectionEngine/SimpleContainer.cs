@@ -8,8 +8,7 @@ namespace DependencyInjectionEngine
     public class SimpleContainer
     {
 
-        Dictionary<Type, TypeInfo> registredList = 
-            new Dictionary<Type, TypeInfo>();
+        Dictionary<Type, TypeInfo> registredList = new Dictionary<Type, TypeInfo>();
 
         public void RegisterType<T>(bool singleton) where T : class
         {
@@ -18,14 +17,12 @@ namespace DependencyInjectionEngine
 
         public void RegisterType<From, To>(bool singleton) where To : From
         {
-            registredList[typeof(From)] = 
-                new TypeInfo(typeof(To), singleton);
+            registredList[typeof(From)] = new TypeInfo(typeof(To), singleton);
         }
 
         public void RegisterInstance<T>(T instance)
         {
-            registredList[typeof(T)] = 
-                new TypeInfo(instance.GetType(), true, instance);
+            registredList[typeof(T)] = new TypeInfo(instance.GetType(), true, instance);
         }
 
 
@@ -56,6 +53,7 @@ namespace DependencyInjectionEngine
         private object GetInstance(TypeInfo typeInfo)
         {
             ConstructorInfo constructor;
+            var resolvedParametersObjects = new List<object>();
 
 
             if (typeInfo.Instance != null && typeInfo.Singleton)
@@ -70,13 +68,27 @@ namespace DependencyInjectionEngine
 
             foreach (var (item, index) in constructor.GetParameters().WithIndex())
             {
-                Type type = item.ParameterType;
-                MethodInfo method = typeof(SimpleContainer).GetMethod("GenericMethod");
-                MethodInfo generic = method.MakeGenericMethod(type);
-                var result = generic.Invoke(this, null);
+                try
+                {
+                    Type type = item.ParameterType;
+                    MethodInfo method = typeof(SimpleContainer).GetMethod("Resolve");
+                    MethodInfo generic = method.MakeGenericMethod(type);
+                    var result = generic.Invoke(this, null);
+
+                    resolvedParametersObjects.Add(result);
+                }
+                catch (ArgumentException e)
+                {
+                    throw
+                        new InvalidOperationException(
+                            "Cannot resolve one of the constructors",
+                            e);
+                }
+
             }
 
-            typeInfo.Instance = typeInfo.ResolveType.GetConstructor(new Type[0]).Invoke(new object[0]);
+            typeInfo.Instance = constructor.Invoke(resolvedParametersObjects.ToArray());
+
             return typeInfo.Instance;
         }
     }
@@ -90,8 +102,8 @@ namespace DependencyInjectionEngine
 
         public TypeInfo(Type resolveType, bool singleton)
         {
-            this.ResolveType = resolveType;
-            this.Singleton = singleton;
+            ResolveType = resolveType;
+            Singleton = singleton;
         }
 
         public TypeInfo(Type resolveType, bool singleton, object instance) 
