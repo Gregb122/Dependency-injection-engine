@@ -250,10 +250,33 @@ namespace UnitTests
             SimpleContainer c = new SimpleContainer();
 
             // act
-            c.RegisterInstance("ala ma kota"); // rejestruje instancjê string
+            c.RegisterInstance("ala ma kota");
             X x = c.Resolve<X>();
 
             // assert is handled by the ExpectedException
+        }
+
+        class Aa
+        {
+            public Aa(Bb b)
+            { }
+        }
+
+        class Bb
+        {
+            public Bb(Aa a)
+            { }
+        }
+
+        [TestMethod]
+        [ExpectedException(typeof(TargetInvocationException))]
+        public void ResolveCycleInGraph()
+        {
+            // arrange
+            SimpleContainer c = new SimpleContainer();
+
+            // act
+            c.Resolve<Aa>();
         }
     }
 }

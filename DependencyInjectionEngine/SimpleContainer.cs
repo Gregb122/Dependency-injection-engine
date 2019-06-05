@@ -7,7 +7,7 @@ namespace DependencyInjectionEngine
 {
     public class SimpleContainer
     {
-
+        List<Type> recentTypes = new List<Type>();
         Dictionary<Type, TypeInfo> registredList = new Dictionary<Type, TypeInfo>();
 
         public void RegisterType<T>(bool singleton) where T : class
@@ -28,6 +28,13 @@ namespace DependencyInjectionEngine
 
         public T Resolve<T>()
         {
+            if (recentTypes.Contains(typeof(T)))
+            {
+                throw new ArgumentException("Can't resolve types since there are cycle");
+            }
+
+            recentTypes.Add(typeof(T));
+
             TypeInfo typeInfo;
             try
             {
@@ -44,13 +51,31 @@ namespace DependencyInjectionEngine
                 }
                 else
                 {
-                    return (T)GetInstance(new TypeInfo(typeof(T), false));
+                    return (T)GetInstance(new TypeInfo(typeof(T), false)).Instance;
                 }
             }
-            return (T)GetInstance(typeInfo);
+            var PreResolvedTypeInfo = GetInstance(typeInfo);
+
+            //var ResolvedTypeInfo = ResolveMethods(typeInfo);
+            return (T)PreResolvedTypeInfo.Instance;
         }
 
-        private object GetInstance(TypeInfo typeInfo)
+        private TypeInfo ResolveMethodsAndProperties(TypeInfo typeInfo)
+        {
+            var methods = typeInfo.ResolveType.Assembly
+                      .GetTypes()
+                      .SelectMany(t => t.GetMethods())
+                      .Where(m => m.GetCustomAttributes(typeof(DependencyMethod), false).Length > 0);
+
+            var properties = typeInfo.ResolveType.Assembly
+                      .GetTypes()
+                      .SelectMany(t => t.GetProperties())
+                      .Where(m => m.GetCustomAttributes(typeof(DependencyProperty), false).Length > 0);
+
+            return typeInfo;
+        }
+
+        private TypeInfo GetInstance(TypeInfo typeInfo)
         {
             ConstructorInfo constructor;
             var resolvedParametersObjects = new List<object>();
@@ -58,7 +83,7 @@ namespace DependencyInjectionEngine
 
             if (typeInfo.Instance != null && typeInfo.Singleton)
             {
-                return typeInfo.Instance;
+                return typeInfo;
             }
 
 
@@ -66,7 +91,7 @@ namespace DependencyInjectionEngine
                 .OrderByDescending(x => x.GetParameters().GetLength(0))
                 .First();
 
-            foreach (var (item, index) in constructor.GetParameters().WithIndex())
+            foreach (var item in constructor.GetParameters())
             {
                 try
                 {
@@ -89,7 +114,8 @@ namespace DependencyInjectionEngine
 
             typeInfo.Instance = constructor.Invoke(resolvedParametersObjects.ToArray());
 
-            return typeInfo.Instance;
+            recentTypes.Remove(typeInfo.ResolveType);
+            return typeInfo;
         }
     }
 
